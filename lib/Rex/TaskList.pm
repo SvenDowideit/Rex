@@ -20,6 +20,7 @@ use vars qw(%tasks);
 
 # will be set from Rex::Transaction::transaction()
 our $IN_TRANSACTION = 0;
+our $DEFAULT_AUTH = 1;
 
 sub create_task {
    my $class     = shift;
@@ -38,6 +39,8 @@ sub create_task {
    }
 
    my @server = ();
+
+=begin
 
    if($::FORCE_SERVER) {
 
@@ -89,18 +92,50 @@ sub create_task {
 
    }
 
-   $tasks{$task_name} = Rex::Task->new(
+=cut
+
+   if($::FORCE_SERVER) {
+
+      my @servers = split(/\s+/, $::FORCE_SERVER);
+      push(@server, map { Rex::Group::Entry::Server->new(name => $_); } @servers);
+
+      Rex::Logger::debug("\tserver: $_") for @server;
+
+   }
+
+   else {
+
+      if(scalar(@_) >= 1) {
+         if($_[0] eq "group") {
+            my $groups;
+            if(ref($_[1]) eq "ARRAY") {
+               $groups = $_[1];
+            }
+            else {
+               $groups = [ $_[1] ];
+            }
+    
+            for my $group (@{$groups}) {
+               if(Rex::Group->is_group($group)) {
+                  push(@server, Rex::Group->get_group($group));
+               }
+            }
+         }
+         else {
+            for my $entry (@_) {
+               push(@server, Rex::Group::Entry::Server->new(name => $entry));
+            }
+         }
+      }
+
+   }
+
+   my %task_hash = (
       func => $func,
       server => [ @server ],
       desc => $desc,
       no_ssh => ($options->{"no_ssh"}?1:0),
       hidden => ($options->{"dont_register"}?1:0),
-      auth => {
-         user        => Rex::Config->get_user,
-         password    => Rex::Config->get_password,
-         private_key => Rex::Config->get_private_key,
-         public_key  => Rex::Config->get_public_key,
-      },
       before => [],
       after  => [],
       around => [],
@@ -108,6 +143,18 @@ sub create_task {
       executor => Rex::Interface::Executor->create,
       connection_type => Rex::Config->get_connection_type,
    );
+
+   if($DEFAULT_AUTH) {
+      $task_hash{auth} = {
+         user        => Rex::Config->get_user,
+         password    => Rex::Config->get_password,
+         private_key => Rex::Config->get_private_key,
+         public_key  => Rex::Config->get_public_key,
+         sudo_password => Rex::Config->get_sudo_password,
+      };
+   }
+
+   $tasks{$task_name} = Rex::Task->new(%task_hash);
 
 }
 

@@ -26,30 +26,24 @@ sub new {
 sub connect {
    my ($self, %option) = @_;
 
-   my ($user, $pass, $private_key, $public_key, $server, $port, $timeout);
+   my ($user, $pass, $private_key, $public_key, $server, $port, $timeout, $auth_type, $is_sudo);
 
    $user    = $option{user};
    $pass    = $option{password};
    $server  = $option{server};
    $port    = $option{port};
    $timeout = $option{timeout};
+   $public_key = $option{public_key};
+   $private_key = $option{private_key};
+   $auth_type   = $option{auth_type};
+   $is_sudo     = $option{sudo};
+
+   $self->{is_sudo} = $is_sudo;
+
+   Rex::Logger::debug("Using user: " . $user);
+   Rex::Logger::debug("Using password: " . ($pass?"***********":"<no password>"));
 
    $self->{server} = $server;
-
-   $public_key  = Rex::Config->get_public_key;
-   $private_key = Rex::Config->get_private_key;
-
-   if( ! Rex::Config->has_user && Rex::Config->get_ssh_config_username(server => $server) ) {
-      $user = Rex::Config->get_ssh_config_username(server => $server);
-   }
-
-   if( ! Rex::Config->has_private_key && Rex::Config->get_ssh_config_private_key(server => $server) ) {
-      $private_key = Rex::Config->get_ssh_config_private_key(server => $server);
-   }
-
-   if( ! Rex::Config->has_public_key && Rex::Config->get_ssh_config_public_key(server => $server) ) {
-      $public_key = Rex::Config->get_ssh_config_public_key(server => $server);
-   }
 
    $self->{ssh} = Net::SSH2->new;
 
@@ -83,11 +77,11 @@ sub connect {
 
    $self->{connected} = 1;
 
-   if(Rex::Config->get_password_auth) {
+   if($auth_type eq "pass") {
       Rex::Logger::debug("Using password authentication.");
       $self->{auth_ret} = $self->{ssh}->auth_password($user, $pass);
    }
-   elsif(Rex::Config->get_key_auth) {
+   elsif($auth_type eq "key") {
       Rex::Logger::debug("Using key authentication.");
       $self->{auth_ret} = $self->{ssh}->auth_publickey($user,
                               $public_key,
@@ -136,6 +130,23 @@ sub is_authenticated {
    return $self->{auth_ret};
 }
 
-sub get_connection_type { return "SSH"; }
+sub get_connection_type {
+   my ($self) = @_;
+
+   my $type = "SSH";
+
+   if($self->{is_sudo} && $self->{is_sudo} == 1) {
+      return "Sudo";
+   }
+
+   if(Rex::is_ssh() && ! Rex::is_sudo()) {
+      $type = "SSH";
+   }
+   elsif(Rex::is_sudo()) {
+      $type = "Sudo";
+   }
+ 
+   return $type;
+}
 
 1;

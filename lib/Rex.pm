@@ -76,13 +76,14 @@ use warnings;
 use Net::SSH2;
 use Rex::Logger;
 use Rex::Cache;
+use Rex::Interface::Connection;
 
 our (@EXPORT,
       $VERSION,
       @CONNECTION_STACK,
       $GLOBAL_SUDO);
 
-$VERSION = "0.30.1";
+$VERSION = "0.31.4";
 
 sub push_connection {
    push @CONNECTION_STACK, $_[0];
@@ -114,6 +115,18 @@ The server name
 =cut
 
 sub get_current_connection {
+
+   # if no connection available, use local connect
+   unless(@CONNECTION_STACK) {
+      my $conn = Rex::Interface::Connection->create("Local");
+
+      Rex::push_connection({
+         conn   => $conn,
+         ssh    => $conn->get_connection_object,
+         cache => Rex::Cache->new(),
+      });
+   }
+
    $CONNECTION_STACK[-1];
 }
 
@@ -152,6 +165,9 @@ sub is_sudo {
 sub global_sudo {
    my ($on) = @_;
    $GLOBAL_SUDO = $on;
+
+   # turn cache on
+   $Rex::Cache::USE = 1;
 }
 
 =item get_sftp
@@ -263,7 +279,7 @@ sub deprecated {
 
 
 sub import {
-   my ($class, $what) = @_;
+   my ($class, $what, $addition1) = @_;
 
    $what ||= "";
 
@@ -308,6 +324,12 @@ sub import {
 
       require Rex::Commands::Process;
       Rex::Commands::Process->import(register_in => $register_to);
+   }
+   elsif($what eq "-feature" || $what eq "feature") {
+      # remove default task auth
+      if($addition1 eq "0.31") {
+         $Rex::TaskList::DEFAULT_AUTH = 0;
+      }
    }
 
    # we are always strict

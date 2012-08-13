@@ -33,6 +33,7 @@ use Data::Dumper;
 our ($user, $password, $port,
             $timeout, $max_connect_fails,
             $password_auth, $key_auth, $public_key, $private_key, $parallelism, $log_filename, $log_facility, $sudo_password,
+            $ca_file, $ca_cert, $ca_key,
             $path,
             $set_param,
             $environment,
@@ -101,7 +102,7 @@ sub get_user {
       return $user;
    }
 
-   return $ENV{"USER"};
+   return getlogin || getpwuid($<) || "Kilroy";
 }
 
 sub get_password {
@@ -123,7 +124,7 @@ sub get_port {
 
 sub get_sudo_password {
    my $class = shift;
-   return $sudo_password;
+   return $sudo_password || $password || "";
 }
 
 sub set_timeout {
@@ -266,7 +267,12 @@ sub get_ssh_config_private_key {
 
    if(exists $param->{server} && exists $SSH_CONFIG_FOR{$param->{server}}
          && exists $SSH_CONFIG_FOR{$param->{server}}->{identityfile}) {
-      return $SSH_CONFIG_FOR{$param->{server}}->{identityfile};
+
+      my $file = $SSH_CONFIG_FOR{$param->{server}}->{identityfile};
+      my $home_dir = _home_dir();
+      $file =~ s/^~/$home_dir/;
+      
+      return $file;
    }
 
    return 0;
@@ -278,7 +284,10 @@ sub get_ssh_config_public_key {
 
    if(exists $param->{server} && exists $SSH_CONFIG_FOR{$param->{server}}
          && exists $SSH_CONFIG_FOR{$param->{server}}->{identityfile}) {
-      return $SSH_CONFIG_FOR{$param->{server}}->{identityfile} . ".pub";
+      my $file = $SSH_CONFIG_FOR{$param->{server}}->{identityfile} . ".pub";
+      my $home_dir = _home_dir();
+      $file =~ s/^~/$home_dir/;
+      return $file;
    }
 
    return 0;
@@ -288,6 +297,22 @@ sub get_connection_type {
    my $class = shift;
    return $connection_type || "SSH";
 }
+
+sub get_ca {
+   my $class = shift;
+   return $ca_file || "";
+}
+
+sub get_ca_cert {
+   my $class = shift;
+   return $ca_cert || "";
+}
+
+sub get_ca_key {
+   my $class = shift;
+   return $ca_key || "";
+}
+
 
 =item register_set_handler($handler_name, $code)
 
@@ -375,22 +400,27 @@ sub register_config_handler {
 
 sub import {
    if(-f _home_dir() . "/.ssh/config") {
-      my ($host, $in_host);
+      my (@host, $in_host);
       if(open(my $fh, "<", _home_dir() . "/.ssh/config")) {
          while(my $line = <$fh>) {
             chomp $line;
             next if ($line =~ m/^#/);
             next if ($line =~ m/^\s*$/);
 
-            if($line =~ m/^Host ([^\s]+)/) {
+            if($line =~ m/^Host (.*)$/) {
+               my $host_tmp = $1; 
+               @host = split(/\s+/, $host_tmp);
                $in_host = 1;
-               $host = $1; 
-               $SSH_CONFIG_FOR{$host} = {}; 
+               for my $h (@host) {
+                  $SSH_CONFIG_FOR{$h} = {}; 
+               }
                next;
             }   
             elsif($in_host) {
                my ($key, $val) = ($line =~ m/^\s*([^\s]+)\s+(.*)$/);
-               $SSH_CONFIG_FOR{$host}->{lc($key)} = $val;
+               for my $h (@host) {
+                  $SSH_CONFIG_FOR{$h}->{lc($key)} = $val;
+               }
             }   
          }
          close($fh);
@@ -443,7 +473,7 @@ __PACKAGE__->register_config_handler(base => sub {
    }
 });
 
-my @set_handler = qw/user password private_key public_key -keyauth -passwordauth -passauth parallelism sudo_password connection/;
+my @set_handler = qw/user password private_key public_key -keyauth -passwordauth -passauth parallelism sudo_password connection ca cert key/;
 for my $hndl (@set_handler) {
    __PACKAGE__->register_set_handler($hndl => sub {
       my ($val) = @_;
@@ -453,6 +483,9 @@ for my $hndl (@set_handler) {
       if($hndl eq "keyauth") { $hndl = "key_auth"; $val = 1; }
       if($hndl eq "passwordauth" || $hndl eq "passauth") { $hndl = "password_auth"; $val = 1; }
       if($hndl eq "connection") { $hndl = "connection_type"; }
+      if($hndl eq "ca") { $hndl = "ca_file"; }
+      if($hndl eq "cert") { $hndl = "ca_cert"; }
+      if($hndl eq "key") { $hndl = "ca_key"; }
 
       $$hndl = $val; 
    });
