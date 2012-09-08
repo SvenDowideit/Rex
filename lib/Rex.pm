@@ -83,7 +83,18 @@ our (@EXPORT,
       @CONNECTION_STACK,
       $GLOBAL_SUDO);
 
-$VERSION = "0.31.4";
+$VERSION = "0.32.0";
+
+push(@INC, sub {
+
+   my $mod_to_load = $_[1];
+   $mod_to_load =~ s/\.pm//g;
+   if(-d "lib/$mod_to_load" && -f "lib/$mod_to_load/Module.pm") {
+      open(my $fh, "lib/$mod_to_load/Module.pm");
+      return $fh;
+   }
+
+});
 
 sub push_connection {
    push @CONNECTION_STACK, $_[0];
@@ -327,8 +338,8 @@ sub import {
    }
    elsif($what eq "-feature" || $what eq "feature") {
       # remove default task auth
-      if($addition1 eq "0.31") {
-         $Rex::TaskList::DEFAULT_AUTH = 0;
+      if($addition1  >= 0.31) {
+         Rex::TaskList->create()->set_default_auth(0);
       }
    }
 
@@ -355,6 +366,8 @@ Many thanks to the contributors for their work (alphabetical order).
 =item Jeen Lee
 
 =item Jose Luis Martinez
+
+=item Nikolay Fetisov
 
 =item Samuele Tognini
 

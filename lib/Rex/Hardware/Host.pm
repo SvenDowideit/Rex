@@ -100,6 +100,10 @@ sub get_operating_system {
       return "Gentoo";
    }
 
+   if(is_file("/etc/altlinux-release")) {
+      return "ALT";
+   }
+
    if(is_file("/etc/redhat-release")) {
       my $fh = file_read("/etc/redhat-release");
       my $content = $fh->read_all;
@@ -132,7 +136,10 @@ sub get_operating_system_version {
    # use lsb_release if available
    if($is_lsb) {
       if(my $ret = run "lsb_release -r -s") {
-         return $ret;
+         my $os_check = run "lsb_release -d";
+         unless($os_check =~ m/SUSE\sLinux\sEnterprise\sServer/) {
+            return $ret;
+         }
       }
    }
 
@@ -190,13 +197,33 @@ sub get_operating_system_version {
 
    elsif($op eq "SuSE") {
       
+      my ($version,$release);
+
       my $fh = file_read("/etc/SuSE-release");
       my $content = $fh->read_all;
       $fh->close;
 
       chomp $content;
 
-      $content =~ m/VERSION = (\d+\.\d+)/m;
+      if($content =~ m/SUSE\sLinux\sEnterprise\sServer/m) {
+         ($version,$release) = $content =~ m/VERSION\s=\s(\d+)\nPATCHLEVEL\s=\s(\d+)/m;
+         $version = "$version.$release";
+      }
+      else {
+         ($version) = $content =~ m/VERSION = (\d+\.\d+)/m;
+      }
+
+      return $version;
+
+   }
+   elsif($op eq "ALT" ) {
+      my $fh = file_read("/etc/altlinux-release");
+      my $content = $fh->read_all;
+      $fh->close;
+
+      chomp $content;
+
+      $content =~ m/(\d+(\.\d+)*)/;
 
       return $1;
 
