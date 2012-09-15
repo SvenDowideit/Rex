@@ -25,9 +25,19 @@ sub execute {
 
    my ($xml, @dominfo, $dom);
    if ($arg1 eq 'capabilities') {
-      @dominfo = run "virsh capabilities";
+      my $cmd = "virsh capabilities";
+      if (defined($opt{type})) {
+         #known and tested : qemu:///system , lxc:///
+         #but they do give odd values
+         $cmd = "virsh --connect $opt{type} capabilities";
+      }
+      @dominfo = run $cmd;
       if($? != 0) {
-         die("Error running virsh dominfo $dom");
+         # can't die here, this is what happens if you ask a host 
+         #that doesn't have that libvirt driver (type) installed
+         #or has no libvirt at all
+         Rex::Logger::info("Error running virsh dominfo ($cmd)");
+         return {};
       }
 
       my $xs = XML::Simple->new();
@@ -49,6 +59,7 @@ sub execute {
       $ret{$line->{'arch'}->{'name'}} = 'true'        
          if defined($line->{'arch'}->{'name'});
 
+      #TODO: can't do this - one host can have lots of emulators
       $ret{'emulator'} = $line->{'arch'}->{'emulator'}->{'content'}
          if defined($line->{'arch'}->{'emulator'}->{'content'});
 
