@@ -36,6 +36,10 @@ use Rex::TaskList;
 use Rex::Interface::Connection;
 use Rex::Interface::Executor;
 use Rex::Group::Entry::Server;
+use Rex::Profiler;
+use Rex::Hardware;
+
+require Rex::Commands;
 
 require Rex::Args;
 
@@ -521,11 +525,15 @@ sub connect {
 
    my $auth = $self->merge_auth($server);
 
+   my $profiler = Rex::Profiler->new;
+
    # task specific auth rules over all
    my %connect_hash = %{ $auth };
    $connect_hash{server} = $server;
 
-   $self->connection->connect(%connect_hash);
+   $profiler->start("connect");
+      $self->connection->connect(%connect_hash);
+   $profiler->end("connect");
 
    if($self->connection->is_authenticated) {
       Rex::Logger::info("Successfull authenticated.");
@@ -543,6 +551,7 @@ sub connect {
          server => $server, 
          cache => Rex::Cache->new(),
          task  => $self,
+         profiler => $profiler,
    });
 
    $self->run_hook(\$server, "around");
@@ -559,6 +568,12 @@ sub disconnect {
 
    $self->run_hook(\$server, "around");
    $self->connection->disconnect;
+
+   my %args = Rex::Args->getopts;
+
+   if(defined $args{'d'} && $args{'d'} > 1) {
+      Rex::Commands::profiler()->report;
+   }
 
    delete $self->{connection};
 
@@ -620,8 +635,17 @@ sub run {
       $self->run_hook(\$server, "before");
       $self->connect($server);
 
+      if(Rex::Args->is_opt("c")) {
+         # get and cache all os info
+         Rex::Hardware->get(qw/All/);
+      }
+
       # execute code
       my $ret = $self->executor->exec($options{params});
+
+
+      # reset all os info
+      Rex::Hardware->reset;
 
       $self->disconnect($server) unless($in_transaction);
       $self->run_hook(\$server, "after");

@@ -13,10 +13,17 @@ use Rex::Hardware::Host;
 use Rex::Commands::Run;
 use Rex::Commands::Sysctl;
 
+require Rex::Hardware;
+
 sub get {
+
+   if(my $ret = Rex::Hardware->cache("Memory")) {
+      return $ret;
+   }
+
    my $os = Rex::Hardware::Host::get_operating_system();
 
-    my $convert = sub {
+   my $convert = sub {
 
       if($_[1] eq "G") {
          $_[0] = $_[0] * 1024 * 1024 * 1024;
@@ -30,8 +37,15 @@ sub get {
 
    };
 
-  
-   if($os eq "SunOS") {
+   if($os eq "Windows") {
+      my $conn = Rex::get_current_connection()->{conn};
+      return {
+         used => $conn->post("/os/memory/used")->{used},
+         total => $conn->post("/os/memory/max")->{max},
+         free => $conn->post("/os/memory/free")->{free},
+      };
+   }
+   elsif($os eq "SunOS") {
       my @data = run "echo ::memstat | mdb -k";
 
       my ($free_cache) = grep { $_=$1 if /^Free \(cache[^\d]+\d+\s+(\d+)/ } @data;

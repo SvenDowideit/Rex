@@ -57,8 +57,14 @@ sub create_user {
    if(exists $data->{home}) {
       $cmd .= " -d " . $data->{home};
 
-      if(!is_dir($data->{home})) {
-         $cmd .= " -m";
+      if(
+         ! (
+            (exists $data->{"no-create-home"} && $data->{"no-create-home"})
+               ||
+            (exists $data->{"no_create_home"} && $data->{"no_create_home"})
+         )
+        ) {
+         $cmd .= " -m ";
       }
    }
 
@@ -141,6 +147,8 @@ sub rm_user {
 
    Rex::Logger::debug("Removing user $user");
 
+   my %user_info = $self->get_user($user);
+
    my $cmd = "userdel";
 
    if(exists $data->{delete_home}) {
@@ -148,6 +156,12 @@ sub rm_user {
    }
 
    run $cmd . " " . $user;
+
+   if(exists $data->{delete_home} && is_dir($user_info{home})) {
+      Rex::Logger::debug("userdel doesn't deleted home. removing it now by hand...");
+      rmdir $user_info{home};  
+   }
+
    if($? != 0) {
       die("Error deleting user $user");
    }

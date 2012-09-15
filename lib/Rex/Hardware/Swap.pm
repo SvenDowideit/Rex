@@ -12,7 +12,13 @@ use warnings;
 use Rex::Commands::Run;
 use Rex::Hardware::Host;
 
+require Rex::Hardware;
+
 sub get {
+
+   if(my $ret = Rex::Hardware->cache("Swap")) {
+      return $ret;
+   }
 
    my $os = Rex::Hardware::Host::get_operating_system();
 
@@ -31,7 +37,15 @@ sub get {
    };
 
 
-   if($os eq "SunOS") {
+   if($os eq "Windows") {
+      my $conn = Rex::get_current_connection()->{conn};
+      return {
+         used => $conn->post("/os/swap/used")->{used},
+         total => $conn->post("/os/swap/max")->{max},
+         free => $conn->post("/os/swap/free")->{free},
+      };
+   }
+   elsif($os eq "SunOS") {
       my ($swap_str) = run("swap -s");
 
       my ($used, $u_ent, $avail, $a_ent) = ($swap_str =~ m/(\d+)([a-z]) used, (\d+)([a-z]) avail/);

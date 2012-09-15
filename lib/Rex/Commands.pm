@@ -128,6 +128,7 @@ use base qw(Rex::Exporter);
             set_distributor
             template_function
             report
+            make
           );
 
 =item no_ssh([$task])
@@ -971,6 +972,15 @@ sub connection {
    return Rex::get_current_connection()->{"conn"};
 }
 
+=item profiler
+
+Returns the profiler object for the current connection.
+
+=cut
+sub profiler {
+   return Rex::get_current_connection()->{"profiler"};
+}
+
 =item report($string)
 
 =cut
@@ -1048,6 +1058,10 @@ sub TRUE {
 
 sub FALSE {
    return 0;
+}
+
+sub make(&) {
+   return $_[0];
 }
 
 =back

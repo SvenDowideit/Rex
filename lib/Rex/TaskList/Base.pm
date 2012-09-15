@@ -180,7 +180,6 @@ sub run {
       my $forked_sub = sub {
 
          Rex::Logger::init();
-
          # create a single task object for the run on $server
 
          my $run_task = Rex::Task->new( %{$task->get_data} );
@@ -188,6 +187,9 @@ sub run {
          $run_task->run($server,
                      in_transaction => $self->{IN_TRANSACTION},
                      params => $option{params});
+
+         # destroy cached os info
+         Rex::Logger::debug("Destroying all cached os information");
 
          Rex::Logger::shutdown();
 
